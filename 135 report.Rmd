@@ -1,0 +1,177 @@
+---
+title: "135 final project"
+author: "Jun Wei"
+date: "3/8/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# dataset 1: T7-1--multipal linear regression 
+```{r}
+data1<-read.table("T7-1.DAT")
+colnames(data1)<-c("total_dwelling_size","assessed_value","selling_price")
+summary(data1)
+par(mfrow=c(1,3))
+for(i in 1:3){
+  hist(data1[,i],xlab=names(data1)[i],main=paste("Histogram of",names(data1)[i]))}
+panel.cor<-function(x, y){
+usr=par("usr"); on.exit(par(usr))
+par(usr = c(0, 1, 0, 1))
+r=round(cor(x, y, use="complete.obs"), digits=2)
+txt=paste0("R = ", r)
+cex.cor=0.8/strwidth(txt)
+text(0.5, 0.5, txt, cex=cex.cor * r)
+}
+pairs(data1, lower.panel=panel.cor)
+par(mfrow=c(1,1))
+library(car)
+scatterplotMatrix(data1,main='Scatter Plot Matrix')
+
+#set.seed(999)
+#n=nrow(data1)
+#ind=sample(1:n, 0.75*n, replace=FALSE)
+#train=data1[ind, ] 
+#valid=data1[-ind, ]
+
+
+fit<-lm(selling_price~total_dwelling_size+assessed_value, data=data1)
+summary(fit)
+fit1<-lm(selling_price~total_dwelling_size, data=data1)
+summary(fit1)
+qqPlot(fit1,id.method='identify',simulate = TRUE,labels=row.names(house),main='Q-Q plot')#normality
+durbinWatsonTest(fit1)#independence
+crPlots(fit1)#linear
+ncvTest(fit1)#homogenious
+
+```
+
+# dataset 2:T11-2 two sample test and LDA
+
+```{r}
+data2<-read.table("T11-2.DAT")
+colnames(data2)<-c("origin","gender","freshwater","marine")
+data2<-data2[,-2]
+x1<-data2[1:50,2:3]
+x2<-data2[51:100,2:3]
+summary(x1)
+summary(x2)
+mu1<-matrix(c(mean(x1[,1]),mean(x1[,2])),2,1)
+mu2<-matrix(c(mean(x2[,1]),mean(x2[,2])),2,1)
+s1<-cov(x1)
+s1
+s2<-cov(x2)
+s2
+x_diff<-mu1-mu2
+x_diff
+n1=n2=50
+n = c(n1, n2)
+sp<-(n1-1)/(n1+n2-2)*s1+(n2-1)/(n1+n2-2)*s2
+sp
+t2<-t(x_diff) %*% solve((1/n1+1/n2)*sp) %*% x_diff
+t2
+cval = (n1+n2-2)/(n1+n2-1-2) * qf(0.95, 2, n1+n2-1-2)
+cval#reject 
+
+
+eig = eigen((1/n1+1/n2)*sp)
+eig$vectors
+sqrt(eig$values) * sqrt(cval)
+ctr    <- as.numeric(x_diff)
+A      <- (1/n1+1/n2) * sp * cval
+angles <- seq(0, 2*pi, length.out=200) 
+eigVal  <- eigen(A)$values
+eigVec  <- eigen(A)$vectors
+eigScl  <- eigVec %*% diag(sqrt(eigVal))  
+xMat    <- rbind(ctr[1] + eigScl[1, ], ctr[1] - eigScl[1, ])
+yMat    <- rbind(ctr[2] + eigScl[2, ], ctr[2] - eigScl[2, ])
+ellBase <- cbind(sqrt(eigVal[1])*cos(angles), sqrt(eigVal[2])*sin(angles)) 
+ellRot  <- eigVec %*% t(ellBase)                                          
+plot((ellRot+ctr)[1, ], (ellRot+ctr)[2, ], asp=1, type="l", lwd=2, xlab = 'X1', ylab = "X2")
+matlines(xMat, yMat, lty=1, lwd=2, col="green")
+points(ctr[1], ctr[2], pch=4, col="red", lwd=3)
+
+# Simultaenous C.I with Bonferroni correction
+q = 2
+t_crit = qt(1-0.05/(2*q), n1+n2-2)
+a = c(1, 0)
+t(a) %*% x_diff - t_crit * sqrt(sum(1/n) * t(a) %*% sp %*% a)
+t(a) %*% x_diff + t_crit * sqrt(sum(1/n) * t(a) %*% sp %*% a)
+a=c(0,1)
+t(a) %*% x_diff - t_crit * sqrt(sum(1/n) * t(a) %*% sp %*% a)
+t(a) %*% x_diff + t_crit * sqrt(sum(1/n) * t(a) %*% sp %*% a)
+
+
+
+library(MASS)
+lda.obj<-lda(origin~freshwater+marine,data=data2, prior=c(1,1)/2)
+lda.obj
+plda<-predict(object=lda.obj, newdata=data2)
+newgroup<-plda$class
+head(cbind(data2$origin , plda$x , newgroup))
+#determine how well the model fits
+true_class <- data2[,1]
+table(true_class, plda$class)
+
+#plot the decision line
+gmean <- lda.obj$prior %*% lda.obj$means
+const <- as.numeric(gmean %*%lda.obj$scaling)
+slope <- - lda.obj$scaling[1] / lda.obj$scaling[2]
+intercept <- const / lda.obj$scaling[2]
+#Plot decision boundary
+plot(data2[,2:3],pch=rep(c(18,20),each=50),col=rep(c(2,4),each=50))
+abline(intercept, slope)
+legend("topright",legend=c("Alaskan","Canadian"),pch=c(18,20),col=c(2,4))
+
+```
+
+
+
+
+# dataset 3: T1-7 principal component analysis
+```{r}
+data3<-read.table("T1-7.dat")
+colnames(data3)<-c("symptoms","activity","sleep","eat","appetite","skin_reaction")
+s<-cov(data3)
+s
+r<-cor(data3)
+r
+eigen(s)$values
+eigen(s)$vectors
+eigen(s)$values[1]/sum(eigen(s)$values)
+(eigen(s)$values[1]+eigen(s)$values[2])/sum(eigen(s)$values)
+(eigen(s)$values[1]+eigen(s)$values[2]+eigen(s)$values[3])/sum(eigen(s)$values)
+eigen(r)$values
+eigen(r)$vectors
+(eigen(r)$values[1])/sum(eigen(r)$values)
+(eigen(r)$values[1]+eigen(r)$values[2])/sum(eigen(r)$values)
+(eigen(r)$values[1]+eigen(r)$values[2]+eigen(r)$values[3])/sum(eigen(r)$values)#s is better
+
+#the scale of the varibales are so different--r
+pca <- princomp(data3, cor=T)
+summary(pca,loadings=T)
+plot(pca, type="line", main="Scree Plot for radiotherapy") 
+abline(h=1, col="blue")
+
+par(pty="s")
+plot(pca$scores[,1], pca$scores[,2], 
+     xlab="PC 1", ylab="PC 2", type ='n', lwd=2)
+text(pca$scores[,1],pca$scores[,2], cex=0.7, lwd=2)
+biplot(pca)
+
+library(factoextra)
+fviz_eig(pca, addlabels = TRUE)
+```
+
+
+
+
+
+
+
+
+
+
+
